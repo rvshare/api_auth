@@ -50,9 +50,7 @@ module ApiAuth
     def canonical_string(override_method = nil)
       request_method = override_method || @request.http_method
 
-      if request_method.nil?
-        raise ArgumentError, 'unable to determine the http method from the request, please supply an override'
-      end
+      raise ArgumentError, 'unable to determine the http method from the request, please supply an override' if request_method.nil?
 
       [request_method.upcase,
        @request.content_type,
@@ -67,15 +65,15 @@ module ApiAuth
     end
 
     def set_date
-      @request.set_date if @request.timestamp.empty?
+      @request.set_date if @request.timestamp.nil?
     end
 
     def calculate_md5
-      @request.populate_content_md5 if @request.content_md5.empty?
+      @request.populate_content_md5 if @request.content_md5.nil?
     end
 
     def md5_mismatch?
-      if @request.content_md5.empty?
+      if @request.content_md5.nil?
         false
       else
         @request.md5_mismatch?
@@ -93,12 +91,12 @@ module ApiAuth
 
     private
 
-    URI_WITHOUT_HOST_REGEXP = %r{https?://[^,?/]*}
-
     def parse_uri(uri)
-      uri_without_host = uri.gsub(URI_WITHOUT_HOST_REGEXP, '')
-      return '/' if uri_without_host.empty?
-      uri_without_host
+      parsed_uri = URI.parse(uri)
+
+      return parsed_uri.request_uri if parsed_uri.respond_to?(:request_uri)
+
+      uri.empty? ? '/' : uri
     end
   end
 end

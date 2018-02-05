@@ -3,17 +3,9 @@ require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 describe ApiAuth::Headers do
   describe '#canonical_string' do
     context 'uri edge cases' do
-      let(:request) { RestClient::Request.new(:url => uri, :method => :get) }
+      let(:request) { RestClient::Request.new(url: uri, method: :get) }
       subject(:headers) { described_class.new(request) }
       let(:uri) { '' }
-
-      context 'empty uri' do
-        let(:uri) { ''.freeze }
-
-        it 'adds / to canonical string' do
-          expect(subject.canonical_string).to eq('GET,,,/,')
-        end
-      end
 
       context 'uri with just host without /' do
         let(:uri) { 'http://google.com'.freeze }
@@ -38,11 +30,23 @@ describe ApiAuth::Headers do
           expect(request.url).to eq(uri)
         end
       end
+
+      context 'uri has a string matching http:// in it' do
+        let(:uri) { 'http://google.com/?redirect_to=https://www.example.com'.freeze }
+
+        it 'return /?redirect_to=https://www.example.com as canonical string path' do
+          expect(subject.canonical_string).to eq('GET,,,/?redirect_to=https://www.example.com,')
+        end
+
+        it 'does not change request url (by removing host)' do
+          expect(request.url).to eq(uri)
+        end
+      end
     end
 
     context 'string construction' do
       context 'with a driver that supplies http_method' do
-        let(:request) { RestClient::Request.new(:url => 'http://google.com', :method => :get) }
+        let(:request) { RestClient::Request.new(url: 'http://google.com', method: :get) }
         subject(:headers) { described_class.new(request) }
         let(:driver) { headers.instance_variable_get('@request') }
 
@@ -131,9 +135,9 @@ describe ApiAuth::Headers do
     context 'no md5 already calculated' do
       let(:request) do
         RestClient::Request.new(
-          :url => 'http://google.com',
-          :method => :post,
-          :payload => "hello\nworld"
+          url: 'http://google.com',
+          method: :post,
+          payload: "hello\nworld"
         )
       end
 
@@ -146,10 +150,10 @@ describe ApiAuth::Headers do
     context 'md5 already calculated' do
       let(:request) do
         RestClient::Request.new(
-          :url => 'http://google.com',
-          :method => :post,
-          :payload => "hello\nworld",
-          :headers => { :content_md5 => 'abcd' }
+          url: 'http://google.com',
+          method: :post,
+          payload: "hello\nworld",
+          headers: { content_md5: 'abcd' }
         )
       end
 
@@ -161,7 +165,7 @@ describe ApiAuth::Headers do
   end
 
   describe '#md5_mismatch?' do
-    let(:request) { RestClient::Request.new(:url => 'http://google.com', :method => :get) }
+    let(:request) { RestClient::Request.new(url: 'http://google.com', method: :get) }
     subject(:headers) { described_class.new(request) }
     let(:driver) { headers.instance_variable_get('@request') }
 
@@ -176,14 +180,14 @@ describe ApiAuth::Headers do
 
     context 'when request has no md5' do
       it "doesn't ask the driver" do
-        allow(driver).to receive(:content_md5).and_return ''
+        allow(driver).to receive(:content_md5).and_return nil
 
         expect(driver).not_to receive(:md5_mismatch?).and_call_original
         headers.md5_mismatch?
       end
 
       it 'returns false' do
-        allow(driver).to receive(:content_md5).and_return ''
+        allow(driver).to receive(:content_md5).and_return nil
 
         expect(headers.md5_mismatch?).to be false
       end
