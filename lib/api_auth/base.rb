@@ -10,6 +10,11 @@ module ApiAuth
   class << self
     include Helpers
 
+
+    def get_headers(request)
+      Headers.new(request) 
+    end
+
     # Signs an HTTP request using the client's access id and secret key.
     # Returns the HTTP request object with the modified headers.
     #
@@ -21,7 +26,7 @@ module ApiAuth
     # secret_key: assigned secret key that is known to both parties
     def sign!(request, access_id, secret_key, options = {})
       options = { override_http_method: nil, digest: 'sha1' }.merge(options)
-      headers = Headers.new(request)
+      headers = get_headers(request)
       headers.calculate_md5
       headers.set_date
       headers.sign_header auth_header(headers, access_id, secret_key, options)
@@ -34,16 +39,13 @@ module ApiAuth
 
       options = { override_http_method: nil }.merge(options)
 
-      headers = Headers.new(request)
-
-      # 900 seconds is 15 minutes
-      clock_skew = options.fetch(:clock_skew, 900)
+      headers = get_headers(request)
 
       if headers.md5_mismatch?
         false
       elsif !signatures_match?(headers, secret_key, options)
         false
-      elsif !request_within_time_window?(headers, clock_skew)
+      elsif !request_within_time_window?(headers, options)
         false
       else
         true
@@ -69,17 +71,12 @@ module ApiAuth
       b64_encode(Digest::SHA2.new(512).digest(random_bytes))
     end
 
-    private
-
-    AUTH_HEADER_PATTERN = /APIAuth(?:-HMAC-(MD5|SHA(?:1|224|256|384|512)?))? ([^:]+):(.+)$/
-
-    def request_within_time_window?(headers, clock_skew)
-      Time.httpdate(headers.timestamp).utc > (Time.now.utc - clock_skew) &&
-        Time.httpdate(headers.timestamp).utc < (Time.now.utc + clock_skew)
-    rescue ArgumentError
-      false
-    end
-
+    # Test if the locally generated signature matches the one given in the request
+    #
+    # headers <Headers>
+    # secret_key <String>
+    # options <Hash> || nil
+    # @return boolean
     def signatures_match?(headers, secret_key, options)
       match_data = parse_auth_header(headers.authorization_header)
       return false unless match_data
@@ -94,6 +91,23 @@ module ApiAuth
 
       secure_equals?(header_sig, calculated_sig, secret_key)
     end
+
+    # Is the request received within an acceptable time window?
+    #
+    #
+    def request_within_time_window?(headers, options)
+      # 900 seconds is 15 minutes
+      clock_skew = options.fetch(:clock_skew, 900)
+
+      Time.httpdate(headers.timestamp).utc > (Time.now.utc - clock_skew) &&
+        Time.httpdate(headers.timestamp).utc < (Time.now.utc + clock_skew)
+    rescue ArgumentError
+      false
+    end
+
+    private
+
+    AUTH_HEADER_PATTERN = /APIAuth(?:-HMAC-(MD5|SHA(?:1|224|256|384|512)?))? ([^:]+):(.+)$/
 
     def secure_equals?(m1, m2, key)
       sha1_hmac(key, m1) == sha1_hmac(key, m2)
